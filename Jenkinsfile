@@ -7,7 +7,8 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git 'https://github.com/awsarchitect2030/Jenkins_python_pipeline.git'
+                git branch: 'main',
+                    url: 'https://github.com/awsarchitect2030/Jenkins_python_pipeline.git'
             }
         }
 
