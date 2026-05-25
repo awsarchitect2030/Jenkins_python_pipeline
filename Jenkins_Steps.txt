@@ -1,0 +1,384 @@
+			                                       JENKINS
+This is a sample Python application that was dockerized and validated through Jenkins pipeline
+
+
+Jenkins controller coordinates the job, but the agent performs the work. So the tools required by the pipeline must exist on that agent.
+the Jenkins agent (slave) is the machine that actually executes the pipeline.
+The Jenkins agent itself needs Java because Jenkins agents run using a Java process
+
+
+File contents on GIT Bash:
+
+app.py
+===========
+
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello():
+    return "Hello from Jenkins pipeline + Docker"
+
+if __name__ == '__main__':
+   app.run(host='0.0.0.0' , port=5000)
+
+requirements.txt
+================
+
+flask
+
+Dockerfile
+==========
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY . .
+
+RUN pip install -r requirements.txt
+
+EXPOSE 5000
+
+CMD ["python", "app.py"]
+
+Jenkinsfile
+===========
+
+pipeline {
+    agent {
+        label 'myslave'
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/awsarchitect2030/Jenkins_python_pipeline.git'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t python-flask-demo .'
+            }
+        }
+
+        stage('Remove Old Container') {
+            steps {
+                sh 'docker rm -f flask-container || true'
+            }
+        }
+
+        stage('Run Docker Container') {
+            steps {
+                sh 'docker run -d -p 5000:5000 --name flask-container python-flask-demo'
+            }
+        }
+    }
+}
+
+
+Create a local foler in GITBash and create files and push all of those to GITHUB.
+
+mkdir my_python_app
+cd my_python_app/
+PS1="Local Git $ "
+notepad app.py
+notepad requirements.txt
+git init
+git add .
+git commit -m "First commit for pipeline"
+git branch
+git branch -M main
+git remote add origin git@github.com:awsarchitect2030/Jenkins_python_pipeline.git
+git remote -v
+git push -u origin main
+notepad Dockerfile
+git status
+git add .
+git commit -m "Docker file added"
+git push -u origin main
+notepad Jenkinsfile
+mv Dockerfile.txt Dockerfile
+mv Jenkinsfile.txt Jenkinsfile
+git add .
+git commit -m "Added Jenkins file and renamed docker and jenkins file"
+git push
+
+
+========================================
+
+Launch EC2 instance  - Below commands can be used on Linux machine.
+
+1. Install java
+
+sudo yum install java-21-amazon-corretto -y
+
+java -version
+
+2. Install GIT
+
+sudo yum install git -y
+
+3. Install Jenkins : 
+
+sudo wget -O /etc/yum.repos.d/jenkins.repo \
+https://pkg.jenkins.io/redhat-stable/jenkins.repo
+
+sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+
+sudo yum install jenkins -y
+
+sudo systemctl start jenkins
+sudo systemctl enable jenkins
+sudo systemctl status jenkins
+
+If status becomes active, get the admin password:
+
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+
+4. Then open:
+
+http://<EC2-public-IP>:8080 (Make sure you enable port 8080 - Custom TCP before launching) 
+Use the admin password from above step and set up your credentials.
+
+5. Install Maven on EC2
+
+sudo yum install maven -y
+
+mvn -version
+
+
+6. New job :
+
+Git  hub : https://github.com/awsarchitect2030/jenkins-devops.git
+
+
+7. Create 2nd EC2 instance as slave and create passwordless authentication. 
+
+8. On the first (Master instance)
+
+ip addr show - to know IP address
+
+Follow below steps to generate keys.
+sudo su - jenkins
+id jenkins
+grep jenkins /etc/passwd
+sudo -u jenkins ssh-keygen -t rsa -b 4096
+sudo -u jenkins cat /var/lib/jenkins/.ssh/id_rsa.pub (Copy the contents and paste under /home/ec2-user/.ssh/authorized_keys on slave machine)
+sudo -u jenkins ssh ec2-user@172.31.44.23 (Should connect without prompting password)
+
+10. On slave machine
+
+
+ip addr show
+vi /home/ec2-user/.ssh/authorized_keys
+sudo yum install java-21-amazon-corretto -y
+java -version
+
+Below steps are to set path on Jenkins pipeline to run the job.
+mkdir -p /home/ec2-user/Jenkins
+chmod 755 /home/ec2-user/Jenkins
+
+ec2-user need to have permission to access the Docker socket so execute below.
+
+sudo usermod -aG docker ec2-user
+newgrp docker
+
+docker ps
+docker images
+sudo yum install git -y
+groups ec2-user
+id
+
+===============================================================
+
+Jenkins Job set up
+
+Open Jenkins page 
+
+Lets set up slave node on Jenkins.
+
+Manage Jenkins -> Nodes -> New node -> Permanent Agent -> 
+Remote root directory (/home/ec2-user/Jenkins) 
+Labels (myslave)
+Launch method -> Launch agents via ssh -> Host -> Enter Slave instance IP -> credentials -> Add -> SSH username with private key ->ec2-user as username and for Private Key - Enter directly paste value from master instance /var/lib/jenkins/.ssh/id_rsa file (private key content of generated key)
+Host Key Verification Strategy ->  Known hosts file Verification Strategy.
+
+Goto Homepage and enter item name , select pipeline -> Enter description -> Pipeline -> Definition -> Pipeline script from SCM -> SCM -> GIT -> Enter full GitHub URL for Repository URL and Credentials can be left untouched for public repositories.
+
+Branches to build -> Branch Specifier -> Update the value from */master to */main , Script Path -> Jenkinsfile 
+
+Save the job and run using "Build Now". Check on Console output of ran build and troubleshoot as per failures. 
+
+Fix and rerun the build.
+
+Console o/p of successful run:
+
+Started by user unknown or anonymous
+Obtained Jenkinsfile from git https://github.com/awsarchitect2030/Jenkins_python_pipeline.git
+[Pipeline] Start of Pipeline
+[Pipeline] node
+Running on myslave in /home/ec2-user/jenkins/workspace/Dockerpipeline
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Declarative: Checkout SCM)
+[Pipeline] checkout
+Selected Git installation does not exist. Using Default
+The recommended git tool is: NONE
+No credentials specified
+Fetching changes from the remote Git repository
+Checking out Revision 1789422611976ee4a669a8c28c8496a5b09a0cbd (refs/remotes/origin/main)
+Commit message: "Update app.py"
+ > git rev-parse --resolve-git-dir /home/ec2-user/jenkins/workspace/Dockerpipeline/.git # timeout=10
+ > git config remote.origin.url https://github.com/awsarchitect2030/Jenkins_python_pipeline.git # timeout=10
+Fetching upstream changes from https://github.com/awsarchitect2030/Jenkins_python_pipeline.git
+ > git --version # timeout=10
+ > git --version # 'git version 2.50.1'
+ > git fetch --tags --force --progress -- https://github.com/awsarchitect2030/Jenkins_python_pipeline.git +refs/heads/*:refs/remotes/origin/* # timeout=10
+ > git rev-parse refs/remotes/origin/main^{commit} # timeout=10
+ > git config core.sparsecheckout # timeout=10
+ > git checkout -f 1789422611976ee4a669a8c28c8496a5b09a0cbd # timeout=10
+ > git rev-list --no-walk b1403b2d4f22e4a3491da4ab61f3a4be9c2f4443 # timeout=10
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Checkout Code)
+[Pipeline] git
+Selected Git installation does not exist. Using Default
+The recommended git tool is: NONE
+No credentials specified
+Fetching changes from the remote Git repository
+Checking out Revision 1789422611976ee4a669a8c28c8496a5b09a0cbd (refs/remotes/origin/main)
+Commit message: "Update app.py"
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Build Docker Image)
+[Pipeline] sh
++ docker build -t python-flask-demo .
+ > git rev-parse --resolve-git-dir /home/ec2-user/jenkins/workspace/Dockerpipeline/.git # timeout=10
+ > git config remote.origin.url https://github.com/awsarchitect2030/Jenkins_python_pipeline.git # timeout=10
+Fetching upstream changes from https://github.com/awsarchitect2030/Jenkins_python_pipeline.git
+ > git --version # timeout=10
+ > git --version # 'git version 2.50.1'
+ > git fetch --tags --force --progress -- https://github.com/awsarchitect2030/Jenkins_python_pipeline.git +refs/heads/*:refs/remotes/origin/* # timeout=10
+ > git rev-parse refs/remotes/origin/main^{commit} # timeout=10
+ > git config core.sparsecheckout # timeout=10
+ > git checkout -f 1789422611976ee4a669a8c28c8496a5b09a0cbd # timeout=10
+ > git branch -a -v --no-abbrev # timeout=10
+ > git branch -D main # timeout=10
+ > git checkout -b main 1789422611976ee4a669a8c28c8496a5b09a0cbd # timeout=10
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 217B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.11-slim
+#2 DONE 1.1s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/4] FROM docker.io/library/python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 13.37kB done
+#5 DONE 0.0s
+
+#6 [2/4] WORKDIR /app
+#6 CACHED
+
+#7 [3/4] COPY . .
+#7 DONE 0.1s
+
+#8 [4/4] RUN pip install -r requirements.txt
+#8 2.118 Collecting flask (from -r requirements.txt (line 1))
+#8 2.137   Downloading flask-3.1.3-py3-none-any.whl.metadata (3.2 kB)
+#8 2.170 Collecting blinker>=1.9.0 (from flask->-r requirements.txt (line 1))
+#8 2.174   Downloading blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+#8 2.215 Collecting click>=8.1.3 (from flask->-r requirements.txt (line 1))
+#8 2.219   Downloading click-8.4.1-py3-none-any.whl.metadata (2.6 kB)
+#8 2.246 Collecting itsdangerous>=2.2.0 (from flask->-r requirements.txt (line 1))
+#8 2.250   Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+#8 2.284 Collecting jinja2>=3.1.2 (from flask->-r requirements.txt (line 1))
+#8 2.287   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+#8 2.367 Collecting markupsafe>=2.1.1 (from flask->-r requirements.txt (line 1))
+#8 2.370   Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+#8 2.418 Collecting werkzeug>=3.1.0 (from flask->-r requirements.txt (line 1))
+#8 2.422   Downloading werkzeug-3.1.8-py3-none-any.whl.metadata (4.0 kB)
+#8 2.446 Downloading flask-3.1.3-py3-none-any.whl (103 kB)
+#8 2.466    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 103.4/103.4 kB 6.8 MB/s eta 0:00:00
+#8 2.468 Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+#8 2.477 Downloading click-8.4.1-py3-none-any.whl (116 kB)
+#8 2.486    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 116.6/116.6 kB 15.9 MB/s eta 0:00:00
+#8 2.490 Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+#8 2.499 Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+#8 2.509    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 134.9/134.9 kB 17.7 MB/s eta 0:00:00
+#8 2.514 Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+#8 2.524 Downloading werkzeug-3.1.8-py3-none-any.whl (226 kB)
+#8 2.535    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 226.5/226.5 kB 26.0 MB/s eta 0:00:00
+#8 2.599 Installing collected packages: markupsafe, itsdangerous, click, blinker, werkzeug, jinja2, flask
+#8 3.034 Successfully installed blinker-1.9.0 click-8.4.1 flask-3.1.3 itsdangerous-2.2.0 jinja2-3.1.6 markupsafe-3.0.3 werkzeug-3.1.8
+#8 3.034 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+#8 3.124 
+#8 3.124 [notice] A new release of pip is available: 24.0 -> 26.1.1
+#8 3.124 [notice] To update, run: pip install --upgrade pip
+#8 DONE 3.3s
+
+#9 exporting to image
+#9 exporting layers
+#9 exporting layers 0.3s done
+#9 writing image sha256:8fd87bc22069c0555e62330a5fca839e4b6d533132d7107f4abb323b5c8c6ff3 done
+#9 naming to docker.io/library/python-flask-demo done
+#9 DONE 0.3s
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Remove Old Container)
+[Pipeline] sh
++ docker rm -f flask-container
+flask-container
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Run Docker Container)
+[Pipeline] sh
++ docker run -d -p 5000:5000 --name flask-container python-flask-demo
+8235f75c9b7571fb353dd69d2eba2dec2bfb4967f67dcc54d2ddb283987e0ab8
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // node
+[Pipeline] End of Pipeline
+Finished: SUCCESS
+
+===============================================================
+
+
+Verify on slave
+
+[ec2-user@ip-172-31-44-23 ~]$ docker ps
+CONTAINER ID   IMAGE               COMMAND           CREATED          STATUS          PORTS                                       NAMES
+8235f75c9b75   python-flask-demo   "python app.py"   32 minutes ago   Up 32 minutes   0.0.0.0:5000->5000/tcp, :::5000->5000/tcp   flask-container
+
+[ec2-user@ip-172-31-44-23 ~]$ docker images
+REPOSITORY          TAG       IMAGE ID       CREATED          SIZE
+python-flask-demo   latest    8fd87bc22069   32 minutes ago   141MB
+[ec2-user@ip-172-31-44-23 ~]$ 
+
+
+ 
+http://<EC2-public-IP of slave>:5000 (Make sure you enable port 5000 - Custom TCP on security group before launching) 
+
+"Hello from Jenkins pipeline + Docker"
