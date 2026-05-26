@@ -169,7 +169,7 @@ id jenkins
 grep jenkins /etc/passwd
 sudo -u jenkins ssh-keygen -t rsa -b 4096
 sudo -u jenkins cat /var/lib/jenkins/.ssh/id_rsa.pub (Copy the contents and paste under /home/ec2-user/.ssh/authorized_keys on slave machine)
-sudo -u jenkins ssh ec2-user@172.31.44.23 (Should connect without prompting password)
+sudo -u jenkins ssh ec2-user@Slave node IP (Should connect without prompting password)
 
 10. On slave machine
 
